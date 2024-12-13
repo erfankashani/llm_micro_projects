@@ -80,5 +80,5 @@ Why did the scarecrow win an award? Because he was outstanding in his field!
 ```bash
 conda env create -f environment.yml
 conda activate llms
-python promotion_generator.py
+python llm_conversationist.py
 # after the scrip is done you can look at the results in promotion.html
