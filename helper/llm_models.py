@@ -7,8 +7,11 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 import anthropic
-import google.generativeai
+from google import genai
+from google.genai import types
 from abc import ABC, abstractmethod
+from pydantic import BaseModel
+import json
 
 # to load the keys from the .env file
 load_dotenv()
@@ -16,7 +19,7 @@ load_dotenv()
 # initiate the connections
 openai = OpenAI()
 claude = anthropic.Anthropic()
-google.generativeai.configure()
+google_genai_client = genai.Client()
 
 # use each llm to generate text
 class AbstractLLM(ABC):
@@ -41,6 +44,15 @@ class OpenAILLM(AbstractLLM):
             ]
         completion = openai.chat.completions.create(model=self.model, messages=prompts)
         return completion.choices[0].message.content
+
+
+    def generate_json(self, user_prompt:str, json_schema:BaseModel) -> json:
+        prompts = [
+            {"role": "system", "content": self.system_prompt}, 
+            {"role": "user", "content": user_prompt}
+            ]
+        completion = openai.beta.chat.completions.parse(model=self.model, messages=prompts, response_format=json_schema)
+        return completion.choices[0].message.parsed
 
 
     def generate_chat(self, user_prompt:list) -> str:
@@ -76,22 +88,29 @@ class AnthropicLLM(AbstractLLM):
 
 class GoogleLLM(AbstractLLM):
     def generate_text(self, user_prompt:list) -> str:
-        model = google.generativeai.GenerativeModel(
-            model_name=self.model,
-            system_instruction=self.system_prompt
+        response = google_genai_client.models.generate_content(
+            model=self.model,
+            config=types.GenerateContentConfig(system_instruction=self.system_prompt),
+            contents=user_prompt
         )
-        response = model.generate_content(user_prompt)
         return response.text
+
+
+    def generate_json(self, user_prompt:list, json_schema:BaseModel) -> json:
+        response = google_genai_client.models.generate_content(
+            model=self.model,
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=self.system_prompt,
+                response_mime_type='application/json',
+                response_schema= json_schema
+            )
+        )
+        return response.parsed
 
 
     def generate_chat(self, user_prompt:list) -> str:
         last_dialog = user_prompt.pop()
-        model = google.generativeai.GenerativeModel(
-            model_name=self.model,
-            system_instruction=self.system_prompt
-        )
-        chat = model.show_chat(
-            history=user_prompt
-        )
-        response = chat.send_message(last_dialog)
+        chat = google_genai_client.chats.create(model=self.model, system_instruction=self.system_prompt, history=user_prompt)
+        response = chat.send_message(message=last_dialog)
         return response.text
