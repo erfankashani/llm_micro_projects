@@ -17,7 +17,7 @@ dependencies:
   - ipywidgets
   - pyarrow
   - anthropic
-  - google-generativeai
+  - google-genai
   - matplotlib
   - scikit-learn
   - chromadb

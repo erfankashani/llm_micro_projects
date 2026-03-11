@@ -6,6 +6,7 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from openai import BadRequestError
 import anthropic
 from google import genai
 from google.genai import types
@@ -51,8 +52,15 @@ class OpenAILLM(AbstractLLM):
             {"role": "system", "content": self.system_prompt}, 
             {"role": "user", "content": user_prompt}
             ]
-        completion = openai.beta.chat.completions.parse(model=self.model, messages=prompts, response_format=json_schema)
-        return completion.choices[0].message.parsed
+        if self.model == "gpt-3.5-turbo":
+            prompts[0]['content'] += f"\nPlease provide the response in JSON format with following schema:\n {json_schema.model_fields}"
+            completion = openai.beta.chat.completions.parse(model=self.model, messages=prompts, response_format={ "type": "json_object" })
+            result_str = completion.choices[0].message.content
+            result = json.loads(result_str)
+        else:
+            completion = openai.beta.chat.completions.parse(model=self.model, messages=prompts, response_format=json_schema)
+            result = completion.choices[0].message.parsed
+        return result
 
 
     def generate_chat(self, user_prompt:list) -> str:

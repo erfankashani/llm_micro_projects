@@ -26,12 +26,17 @@ class Joke(BaseModel):
     joke_count: int
 
 
-# gemini_1_5_flash = GoogleLLM(system_prompt, "gemini-1.5-flash", "Gemini 1.5 Flash")
-# print("\nGemini 1.5 Flash:")
-# print("----------------")
-# # print(gemini_1_5_flash.generate_text(user_prompt=user_prompt))
-# print(type(gemini_1_5_flash.generate_json(user_prompt=user_prompt, json_schema=Joke)))
+gemini_1_5_flash = GoogleLLM(system_prompt, "gemini-2.5-flash", "Gemini 2.5 Flash")
+print("\nGemini 1.5 Flash:")
+print("----------------")
+# print(gemini_1_5_flash.generate_text(user_prompt=user_prompt))
+print(gemini_1_5_flash.generate_json(user_prompt=user_prompt, json_schema=Joke))
 
+
+gpt_3_5_mini = OpenAILLM(system_prompt, "gpt-3.5-turbo", "gpt-3.5-turbo")
+print("\ngpt-3.5-turbo:")
+print("----------------")
+print(gpt_3_5_mini.generate_json(user_prompt=user_prompt, json_schema=Joke))
 
 gpt_4_o_mini = OpenAILLM(system_prompt, "gpt-4o-mini", "GPT-4 O Mini")
 print("\nGPT-4 Omega Mini:")

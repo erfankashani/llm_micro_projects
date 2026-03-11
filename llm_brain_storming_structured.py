@@ -24,6 +24,11 @@ from helper.utils import validate_openai_api_key, validate_anthropic_api_key, va
 from helper.llm_models import OpenAILLM, AnthropicLLM, GoogleLLM
 from abc import ABC, abstractmethod
 import gradio as gr
+from pydantic import BaseModel
+
+# later delete
+import random
+import time
 
 load_dotenv()
 openai_api_key = os.getenv('OPENAI_API_KEY')
@@ -34,6 +39,19 @@ validate_anthropic_api_key(anthropic_api_key)
 
 google_api_key = os.getenv('GOOGLE_API_KEY')
 validate_google_api_key(google_api_key)
+
+class MentalModelDiscussion(BaseModel):
+    "Discussion of a mental model"
+    mental_model: str
+    description: str
+    questions: list[str]
+
+class BrainstormingFormat(BaseModel):
+    "Format for the brainstorming response"
+    user_prompt: str
+    model_name: str
+    mental_models: list[MentalModelDiscussion]
+
 
 def brainstorm(user_prompt:str, model_name:str, mental_models:list):
     "Ask the models to brainstorm"
@@ -50,10 +68,17 @@ def brainstorm(user_prompt:str, model_name:str, mental_models:list):
     print(f"\nUser Prompt: {user_prompt}")
     print(f"\nSelected Model: {model_name}")
     print(f"\nSelected Mental Models: {mental_models}")
-    user_prompt += "\n\nMental Models:\n"
+    user_prompt += f"\n\nmodel_name: {model_name}\n"
+    user_prompt += "\n\nmental_models:\n"
+
+    # mental_models_list = []
     for model in mental_models:
         user_prompt += f"{model} - {mental_models_dict[model]}\n"
-
+        # mental_models_list.append(MentalModelDiscussion(mental_model=model, description=mental_models_dict[model], questions=[]))
+    
+    # format the response format
+    # format_response = BrainstormingFormat(user_prompt=user_prompt, model_name=model_name, mental_models=mental_models_list)
+    # user_prompt += format_response
 
     # repeat the ask to refresh the context attention
     user_prompt += "\n\nPlease ask questions based on the mental models to help brainstorm the topic."
@@ -67,13 +92,13 @@ def brainstorm(user_prompt:str, model_name:str, mental_models:list):
         response = gpt_3_5_turbo.generate_text(user_prompt=user_prompt)
     elif model_name == "GPT-4-o-mini":
         gpt_4_o_mini = OpenAILLM(system_prompt, "gpt-4o-mini", "GPT-4 O Mini")
-        response = gpt_4_o_mini.generate_text(user_prompt=user_prompt)
-    elif model_name == "claude-sonnet-4-6":
-        claude_4_6_sonnet = AnthropicLLM(system_prompt, "claude-sonnet-4-6", "Claude 4.6 Sonnet")
-        response = claude_4_6_sonnet.generate_text(user_prompt=user_prompt)
+        response = gpt_4_o_mini.generate_json(user_prompt=user_prompt, json_schema=BrainstormingFormat)
+    # elif model_name == "Claude-3.5":
+    #     claude_3_5_sonnet = AnthropicLLM(system_prompt, "claude-3-5-sonnet-20240620", "Claude 3.5 Sonnet")
+    #     response = claude_3_5_sonnet.generate_text(user_prompt=user_prompt)
     else:
-        gemini_2_5_flash = GoogleLLM(system_prompt, "gemini-2.5-flash", "Gemini 2.5 Flash")
-        response = gemini_2_5_flash.generate_text(user_prompt=user_prompt)
+        gemini_1_5_flash = GoogleLLM(system_prompt, "gemini-1.5-flash", "Gemini 1.5 Flash")
+        response = gemini_1_5_flash.generate_text(user_prompt=user_prompt)
     
     return response
 
@@ -89,8 +114,57 @@ mental_models_dict = {
     "Agile Methodology": "Iterate rapidly based on feedback to adapt to changing requirements and improve outcomes. be quick to start and iterate your ideas, put out your work as soon and as much as you can. it is fine to be late in finishing the end product."
 }
 
-gr.Interface(fn=brainstorm, 
-             inputs=[gr.Textbox(label="What is on your mind:"), gr.Dropdown(["GPT-3.5", "GPT-4-o-mini", "claude-sonnet-4-6", "Gemini-2.5"], label="Select model", value="GPT-3.5"), gr.Dropdown(list(mental_models_dict.keys()), label="Select Mental Model", multiselect=True)],
-             outputs=[gr.Markdown(label="Brainstorm Idea:")], 
-             flagging_mode="never"
-            ).launch(inbrowser=True, share=True)
+# gr.Interface(fn=brainstorm, 
+#              inputs=[gr.Textbox(label="What is on your mind:"), gr.Dropdown(["GPT-3.5", "GPT-4-o-mini", "Claude-3.5", "Gemini-1.5"], label="Select model", value="GPT-3.5"), gr.Dropdown(list(mental_models_dict.keys()), label="Select Mental Model", multiselect=True)],
+#              outputs=[gr.Markdown(label="Brainstorm Idea:")], 
+#              flagging_mode="never"
+#             ).launch(inbrowser=True, share=True)
+
+with gr.Blocks() as brainstorm_demo:
+    gr.Markdown("## Brainstorming with LLMs")
+    user_prompt = gr.Textbox(label="What is on your mind:")
+    model_name = gr.Dropdown(["GPT-3.5", "GPT-4-o-mini", "Claude-3.5", "Gemini-1.5"], label="Select model", value="GPT-3.5")
+    mental_models = gr.Dropdown(list(mental_models_dict.keys()), label="Select Mental Model", multiselect=True)
+    submit_button = gr.Button("Brainstorm")
+    output = gr.Markdown(label="Brainstorm Idea:")
+    
+    # gr.Button("Brainstorm").click(fn=brainstorm, inputs=[user_prompt, model_name, mental_models], outputs=[output])
+    # after click of the button, the brainstorm will return a json model. we then create seperate blocks of chat capability for each mental_model.questions
+    @gr.render(inputs=[user_prompt, model_name, mental_models], triggers=[submit_button.click])
+    def on_submit_show_chat(user_prompt, model_name, mental_models):
+        response = brainstorm(user_prompt, model_name, mental_models)
+        # output.change(outputs=[str(response)])
+
+        print("Brainstorming Response:")
+        print(type(response))
+        print(response)
+        
+        # parse the response to get the questions for each mental model
+        try:
+            response_json = BrainstormingFormat.model_validate(response)
+            history = [
+                        gr.ChatMessage(role="assistant", content="How can I help you?"),
+                        gr.ChatMessage(role="user", content="Can you make me a plot of quarterly sales?"),
+                        gr.ChatMessage(role="assistant", content="I am happy to provide you that report and plot.")
+                    ]
+
+            def respond(message, chat_history):
+                bot_message = random.choice(["How are you?", "Today is a great day", "I'm very hungry"])
+                chat_history.append({"role": "user", "content": message})
+                chat_history.append({"role": "assistant", "content": bot_message})
+                time.sleep(2)
+                return "", chat_history
+
+            for model in response_json.mental_models:
+                gr.Markdown(f"#### Mental Model: {model.mental_model}")
+                gr.Markdown(f"**Description:** {model.description}")
+                gr.Markdown("**Questions:**")
+                for question in model.questions:
+                    gr.Markdown(f"- {question}")
+                    chatbot = gr.Chatbot(value=history ,label=question, type='messages')
+                    msg = gr.Textbox()
+                    msg.submit(respond, [msg, chatbot], [msg, chatbot])
+        except Exception as e:
+            print(f"Error parsing response: {e}")
+
+brainstorm_demo.launch(inbrowser=True, share=True)
