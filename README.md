@@ -2,6 +2,9 @@
 
 This repo shows the adhoc usecases for the LLM which can be contained in one script
 
+# Architecture
+![image](/images/architecture_simple_llm_proj.png)
+
 ### Features
 - Designed to work with different llms without much code change (OpenAI, Anthropics, GCP)
 - Unified models to generate text or chat with all different models
